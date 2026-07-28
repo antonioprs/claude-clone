@@ -86,43 +86,57 @@ proxy está funcionando.
 
 ## 4. Publicando o frontend no GitHub Pages
 
-Este repo já vem com um workflow (`.github/workflows/deploy.yml`) que builda e
-publica automaticamente a cada `push` na branch `main`.
+**Site já publicado em: https://antonioprs.github.io/claude-clone/**
 
-1. Crie um repositório em `github.com/antonioprs`, por exemplo `claude-clone`,
-   e suba este projeto:
-   ```bash
-   git init
-   git add .
-   git commit -m "Claude clone inicial"
-   git branch -M main
-   git remote add origin https://github.com/antonioprs/claude-clone.git
-   git push -u origin main
-   ```
-2. No repositório, vá em **Settings → Pages** e em **Source** selecione
-   **GitHub Actions** (não "Deploy from a branch").
-3. Espere o workflow rodar em **Actions** (leva ~1 min). Ao terminar, o site
-   fica disponível em:
-   ```
-   https://antonioprs.github.io/claude-clone/
-   ```
+O deploy foi feito pelo método clássico do GitHub Pages — build local +
+push do conteúdo de `dist/` para a branch `gh-pages` (**Settings → Pages →
+Source: "Deploy from a branch" → `gh-pages` / `/`**). Isso não exige nenhuma
+Actions/CI e funciona com qualquer token do GitHub CLI (`gh`), inclusive um
+sem o escopo `workflow`.
+
+Para publicar uma atualização depois de alterar o código:
+
+```bash
+git add .
+git commit -m "sua mensagem"
+git push origin main      # guarda o histórico do código-fonte
+npm run deploy             # builda e publica dist/ na branch gh-pages
+```
+
+`npm run deploy` roda `vite build && gh-pages -d dist -b gh-pages` (pacote
+[`gh-pages`](https://www.npmjs.com/package/gh-pages), já nas `devDependencies`).
+Leva menos de um minuto para o GitHub reconstruir o site depois do push na
+branch `gh-pages`.
+
+### Alternativa: deploy automático via GitHub Actions
+
+Este repo também inclui um workflow pronto em
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) que builda e
+publica a cada `push` em `main`, sem precisar rodar `npm run deploy` manualmente.
+Ele **não está commitado/ativo** porque publicar um arquivo em
+`.github/workflows/` exige que o token usado no `git push` tenha o escopo OAuth
+`workflow` — e o login atual do `gh` para esta conta não tem esse escopo.
+
+Se quiser ativar essa automação:
+
+```bash
+gh auth refresh -h github.com -s workflow
+git add .github/workflows/deploy.yml
+git commit -m "Adiciona deploy automatico via GitHub Actions"
+git push origin main
+```
+
+Depois, em **Settings → Pages → Source**, troque para **"GitHub Actions"**
+(em vez de "Deploy from a branch"). A partir daí, todo `push` em `main` já
+builda e publica sozinho — não é mais necessário rodar `npm run deploy`.
 
 ### Importante: nome do repositório × `base` do Vite
 
-O Vite precisa saber o subcaminho onde o site vai morar. O workflow já resolve
-isso automaticamente (`VITE_BASE=/${{ github.event.repository.name }}/`), então
-**se você nomear o repositório diferente de `claude-clone`, não precisa mudar
-nada** — o build usa o nome real do repo.
-
-Só ajuste manualmente se:
-- O repositório se chamar `antonioprs.github.io` (repo de usuário, serve na
-  raiz) → nesse caso edite `.github/workflows/deploy.yml` e troque o `env` da
-  etapa de build para `VITE_BASE: /`.
-- Quiser buildar localmente para publicar manualmente, use:
-  ```bash
-  VITE_BASE=/claude-clone/ npm run build
-  ```
-  e suba o conteúdo de `dist/` para a branch/pasta que o Pages estiver servindo.
+O Vite precisa saber o subcaminho onde o site vai morar. Como o repositório se
+chama `claude-clone`, `vite.config.js` já usa `/claude-clone/` por padrão —
+não precisa mudar nada. Se algum dia renomear o repositório, ajuste o `base`
+em `vite.config.js` (ou passe `VITE_BASE=/novo-nome/` antes do build) para bater
+com o novo nome.
 
 ---
 
