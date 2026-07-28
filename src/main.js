@@ -17,10 +17,30 @@ import { streamMessage, ApiError } from './api.js';
 marked.setOptions({ breaks: true, gfm: true });
 
 const MODELS = [
-  { id: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-  { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-  { id: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' },
+  { id: 'claude-fable-5', label: 'Claude Fable 5', supportsEffort: true },
+  { id: 'claude-opus-5', label: 'Claude Opus 5', supportsEffort: true },
+  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', supportsEffort: true },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', supportsEffort: false },
 ];
+
+const EFFORT_LEVELS = [
+  { id: 'low', label: 'Baixo' },
+  { id: 'medium', label: 'Médio' },
+  { id: 'high', label: 'Alto' },
+  { id: 'xhigh', label: 'Muito alto' },
+  { id: 'max', label: 'Máximo' },
+];
+
+const EFFORT_MAX_TOKENS = { low: 4096, medium: 4096, high: 8192, xhigh: 32000, max: 64000 };
+
+function buildRequestExtras(modelId, effort) {
+  const def = MODELS.find((m) => m.id === modelId);
+  if (!def || !def.supportsEffort) return { maxTokens: 4096, extra: {} };
+  return {
+    maxTokens: EFFORT_MAX_TOKENS[effort] || 8192,
+    extra: { thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort } },
+  };
+}
 
 const state = {
   settings: loadSettings(),
@@ -67,6 +87,13 @@ app.innerHTML = `
           ${icon('chevronDown')}
         </button>
         <div id="modelMenu" class="hidden absolute left-0 mt-1 w-56 rounded-lg border border-claude-border bg-claude-surface shadow-lg z-20 overflow-hidden"></div>
+      </div>
+      <div class="relative">
+        <button id="effortBtn" class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm hover:bg-claude-surface transition-colors">
+          <span id="effortLabel"></span>
+          ${icon('chevronDown')}
+        </button>
+        <div id="effortMenu" class="hidden absolute left-0 mt-1 w-44 rounded-lg border border-claude-border bg-claude-surface shadow-lg z-20 overflow-hidden"></div>
       </div>
       <div class="flex-1"></div>
       <button id="themeBtn" class="icon-btn" title="Alternar tema">${icon('theme')}</button>
@@ -122,6 +149,13 @@ app.innerHTML = `
       </label>
 
       <label class="block space-y-1">
+        <span class="text-sm font-medium">Nível de raciocínio padrão</span>
+        <select id="defaultEffortInput" class="w-full rounded-lg border border-claude-border bg-transparent px-3 py-2 text-sm outline-none focus:border-claude-accent/60">
+          ${EFFORT_LEVELS.map((e) => `<option value="${e.id}">${e.label}</option>`).join('')}
+        </select>
+      </label>
+
+      <label class="block space-y-1">
         <span class="text-sm font-medium">System prompt (opcional)</span>
         <textarea id="systemPromptInput" rows="3" placeholder="Instruções fixas para todas as conversas..."
           class="w-full resize-none rounded-lg border border-claude-border bg-transparent px-3 py-2 text-sm outline-none focus:border-claude-accent/60"></textarea>
@@ -159,6 +193,9 @@ const el = {
   modelBtn: document.getElementById('modelBtn'),
   modelLabel: document.getElementById('modelLabel'),
   modelMenu: document.getElementById('modelMenu'),
+  effortBtn: document.getElementById('effortBtn'),
+  effortLabel: document.getElementById('effortLabel'),
+  effortMenu: document.getElementById('effortMenu'),
   themeBtn: document.getElementById('themeBtn'),
   messages: document.getElementById('messages'),
   composerWrap: document.getElementById('composerWrap'),
@@ -172,6 +209,7 @@ const el = {
   toggleApiKeyBtn: document.getElementById('toggleApiKeyBtn'),
   proxyUrlInput: document.getElementById('proxyUrlInput'),
   defaultModelInput: document.getElementById('defaultModelInput'),
+  defaultEffortInput: document.getElementById('defaultEffortInput'),
   systemPromptInput: document.getElementById('systemPromptInput'),
   wipeBtn: document.getElementById('wipeBtn'),
 };
@@ -275,6 +313,7 @@ function switchConversation(id) {
   setCurrentId(id);
   renderHistory();
   renderMessages();
+  renderEffortMenu();
 }
 
 function deleteConversation(id) {
@@ -286,6 +325,8 @@ function deleteConversation(id) {
   }
   renderHistory();
   renderMessages();
+  renderModelMenu();
+  renderEffortMenu();
 }
 
 // ---------- messages ----------
@@ -320,8 +361,16 @@ function messageHtml(m, idx) {
       </div>`;
   }
   const bodyHtml = renderMarkdown(m.content);
+  const thinkingHtml =
+    m.thinking && m.thinking.trim()
+      ? `<details class="mb-2 rounded-lg border border-claude-border/60 text-xs text-claude-muted">
+          <summary class="cursor-pointer select-none px-3 py-1.5">Ver raciocínio</summary>
+          <div class="md px-3 pb-2 pt-1 opacity-80">${renderMarkdown(m.thinking)}</div>
+        </details>`
+      : '';
   return `
     <div class="group flex flex-col gap-1">
+      ${thinkingHtml}
       <div class="md text-sm leading-relaxed">${bodyHtml}${m.streaming ? '<span class="caret"></span>' : ''}</div>
       ${
         !m.streaming
@@ -357,7 +406,12 @@ function updateStreamingMessageDom(idx) {
   if (!wrap) return;
   const node = wrap.children[idx];
   if (!node) return;
+  const wasThinkingOpen = node.querySelector('details')?.open;
   node.outerHTML = messageHtml(convo.messages[idx], idx);
+  if (wasThinkingOpen) {
+    const details = wrap.children[idx]?.querySelector('details');
+    if (details) details.open = true;
+  }
   el.messages.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.addEventListener('click', () => copyToClipboard(btn));
   });
@@ -388,7 +442,7 @@ async function handleSend() {
 
   let convo = getCurrentConversation();
   if (!convo) {
-    convo = createConversation(state.settings.model);
+    convo = createConversation(state.settings.model, state.settings.effort);
     state.conversations.push(convo);
     state.currentId = convo.id;
     setCurrentId(convo.id);
@@ -407,26 +461,33 @@ async function handleSend() {
   autoResizeTextarea();
 
   const assistantIdx = convo.messages.length;
-  convo.messages.push({ role: 'assistant', content: '', streaming: true });
+  convo.messages.push({ role: 'assistant', content: '', thinking: '', streaming: true });
   appendMessageDom(convo.messages[assistantIdx], assistantIdx);
 
   setSendingUi(true);
   state.abortController = new AbortController();
 
   try {
-    const finalText = await streamMessage({
+    const model = convo.model || state.settings.model;
+    const effort = convo.effort || state.settings.effort;
+    const { maxTokens, extra } = buildRequestExtras(model, effort);
+    const result = await streamMessage({
       proxyUrl: state.settings.proxyUrl,
       apiKey: state.settings.apiKey,
-      model: convo.model || state.settings.model,
+      model,
       messages: convo.messages.slice(0, -1),
       system: state.settings.systemPrompt,
+      maxTokens,
+      extra,
       signal: state.abortController.signal,
-      onDelta: (_delta, full) => {
-        convo.messages[assistantIdx].content = full;
+      onUpdate: ({ text, thinking }) => {
+        convo.messages[assistantIdx].content = text;
+        convo.messages[assistantIdx].thinking = thinking;
         updateStreamingMessageDom(assistantIdx);
       },
     });
-    convo.messages[assistantIdx].content = finalText;
+    convo.messages[assistantIdx].content = result.text;
+    convo.messages[assistantIdx].thinking = result.thinking;
   } catch (err) {
     const aborted = err?.name === 'AbortError';
     const msg = aborted
@@ -463,6 +524,44 @@ function renderModelMenu() {
       saveSettings(state.settings);
       el.modelMenu.classList.add('hidden');
       renderModelMenu();
+      renderEffortMenu();
+    });
+  });
+}
+
+// ---------- effort selector ----------
+function renderEffortMenu() {
+  const currentModelId = getCurrentConversation()?.model || state.settings.model;
+  const currentModel = MODELS.find((m) => m.id === currentModelId);
+  const currentEffort = getCurrentConversation()?.effort ?? state.settings.effort;
+
+  el.effortLabel.textContent = EFFORT_LEVELS.find((e) => e.id === currentEffort)?.label || 'Nível de raciocínio';
+
+  const supportsEffort = !!currentModel && currentModel.supportsEffort !== false;
+  el.effortBtn.classList.toggle('opacity-50', !supportsEffort);
+  el.effortBtn.classList.toggle('pointer-events-none', !supportsEffort);
+  if (!supportsEffort) {
+    el.effortBtn.title = 'Claude Haiku 4.5 não suporta ajuste de nível de raciocínio';
+  } else {
+    el.effortBtn.removeAttribute('title');
+  }
+
+  el.effortMenu.innerHTML = EFFORT_LEVELS.map(
+    (e) => `<button data-effort="${e.id}" class="w-full text-left px-3 py-2 text-sm hover:bg-claude-surface2 flex items-center justify-between">
+      <span>${e.label}</span>
+    </button>`
+  ).join('');
+  el.effortMenu.querySelectorAll('[data-effort]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const convo = getCurrentConversation();
+      if (convo) {
+        convo.effort = btn.dataset.effort;
+        persistConversations();
+      }
+      state.settings.effort = btn.dataset.effort;
+      saveSettings(state.settings);
+      el.effortMenu.classList.add('hidden');
+      renderEffortMenu();
     });
   });
 }
@@ -472,6 +571,7 @@ function openSettings() {
   el.apiKeyInput.value = state.settings.apiKey;
   el.proxyUrlInput.value = state.settings.proxyUrl;
   el.defaultModelInput.value = state.settings.model;
+  el.defaultEffortInput.value = state.settings.effort;
   el.systemPromptInput.value = state.settings.systemPrompt;
   el.apiKeyInput.type = 'password';
   el.settingsModal.classList.remove('hidden');
@@ -487,9 +587,11 @@ function saveSettingsFromModal() {
   state.settings.apiKey = el.apiKeyInput.value.trim();
   state.settings.proxyUrl = el.proxyUrlInput.value.trim();
   state.settings.model = el.defaultModelInput.value;
+  state.settings.effort = el.defaultEffortInput.value;
   state.settings.systemPrompt = el.systemPromptInput.value;
   saveSettings(state.settings);
   renderModelMenu();
+  renderEffortMenu();
   closeSettings();
 }
 
@@ -500,6 +602,7 @@ el.newChatBtn.addEventListener('click', () => {
   renderHistory();
   renderMessages();
   renderModelMenu();
+  renderEffortMenu();
   el.promptInput.focus();
 });
 
@@ -543,6 +646,7 @@ function confirmWipe(fromModal) {
   renderHistory();
   renderMessages();
   renderModelMenu();
+  renderEffortMenu();
   if (fromModal) closeSettings();
 }
 
@@ -552,6 +656,15 @@ el.modelBtn.addEventListener('click', () => {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#modelBtn') && !e.target.closest('#modelMenu')) {
     el.modelMenu.classList.add('hidden');
+  }
+});
+
+el.effortBtn.addEventListener('click', () => {
+  el.effortMenu.classList.toggle('hidden');
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#effortBtn') && !e.target.closest('#effortMenu')) {
+    el.effortMenu.classList.add('hidden');
   }
 });
 
@@ -574,3 +687,4 @@ el.sendBtn.addEventListener('click', handleSend);
 renderHistory();
 renderMessages();
 renderModelMenu();
+renderEffortMenu();

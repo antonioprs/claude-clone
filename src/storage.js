@@ -11,7 +11,8 @@ const KEYS = {
 const DEFAULT_SETTINGS = {
   apiKey: '',
   proxyUrl: '',
-  model: 'claude-3-5-sonnet-20241022',
+  model: 'claude-sonnet-5',
+  effort: 'high',
   theme: 'dark',
   systemPrompt: '',
 };
@@ -58,12 +59,13 @@ export function setCurrentId(id) {
   }
 }
 
-export function createConversation(model) {
+export function createConversation(model, effort) {
   const now = Date.now();
   return {
     id: uid(),
     title: 'Nova conversa',
     model,
+    effort,
     messages: [],
     createdAt: now,
     updatedAt: now,

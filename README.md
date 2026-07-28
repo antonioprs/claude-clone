@@ -76,7 +76,7 @@ curl -i https://SEU-WORKER.workers.dev/v1/messages \
   -H "x-api-key: sk-ant-..." \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-3-haiku-20240307","max_tokens":16,"messages":[{"role":"user","content":"oi"}]}'
+  -d '{"model":"claude-haiku-4-5","max_tokens":16,"messages":[{"role":"user","content":"oi"}]}'
 ```
 
 Se voltar um JSON com a resposta do modelo (e não um erro de CORS ou 522), o
@@ -158,16 +158,23 @@ para configurar; em outro navegador/computador você precisa repetir o passo.
 
 ## 6. Modelos disponíveis
 
-| Nome exibido        | ID enviado à API                |
-|---------------------|----------------------------------|
-| Claude 3 Opus        | `claude-3-opus-20240229`        |
-| Claude 3.5 Sonnet     | `claude-3-5-sonnet-20241022`    |
-| Claude 3 Haiku        | `claude-3-haiku-20240307`       |
+| Nome exibido        | ID enviado à API      | Suporta nível de raciocínio |
+|---------------------|------------------------|------------------------------|
+| Claude Fable 5       | `claude-fable-5`      | Sim                          |
+| Claude Opus 5        | `claude-opus-5`       | Sim                          |
+| Claude Sonnet 5      | `claude-sonnet-5`     | Sim                          |
+| Claude Haiku 4.5     | `claude-haiku-4-5`    | Não                          |
+
+Além do modelo, a barra superior tem um seletor de **nível de raciocínio**
+(effort: baixo, médio, alto, muito alto, máximo), que controla o quanto o
+modelo "pensa" antes de responder — o equivalente ao controle de reasoning
+effort do Claude Code. Esse seletor fica indisponível ao escolher o Claude
+Haiku 4.5, porque esse modelo não suporta o parâmetro de esforço.
 
 A Anthropic ocasionalmente descontinua versões antigas de modelo. Se um ID
 parar de funcionar, confira os IDs atuais em
 [docs.anthropic.com/en/docs/about-claude/models](https://docs.anthropic.com/en/docs/about-claude/models)
-e atualize a lista `MODELS` em [`src/main.js`](src/main.js).
+e atualize as listas `MODELS`/`EFFORT_LEVELS` em [`src/main.js`](src/main.js).
 
 ---
 

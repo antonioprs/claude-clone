@@ -21,10 +21,13 @@ export class ApiError extends Error {
  * @param {string} opts.model
  * @param {Array<{role: 'user'|'assistant', content: string}>} opts.messages
  * @param {string} [opts.system]
- * @param {(deltaText: string) => void} opts.onDelta
+ * @param {number} [opts.maxTokens] - substitui o padrão de 4096
+ * @param {object} [opts.extra] - campos extras a espalhar no body (ex: thinking, output_config)
+ * @param {(update: { text: string, thinking: string }) => void} opts.onUpdate
  * @param {AbortSignal} [opts.signal]
+ * @returns {Promise<{ text: string, thinking: string }>}
  */
-export async function streamMessage({ proxyUrl, apiKey, model, messages, system, onDelta, signal }) {
+export async function streamMessage({ proxyUrl, apiKey, model, messages, system, maxTokens, extra, onUpdate, signal }) {
   if (!apiKey) throw new ApiError('Nenhuma API key configurada. Abra as Configurações e cole sua chave da Anthropic.', 0);
   if (!proxyUrl) throw new ApiError('Nenhuma URL de proxy configurada. Abra as Configurações e informe a URL do seu Cloudflare Worker.', 0);
 
@@ -34,9 +37,10 @@ export async function streamMessage({ proxyUrl, apiKey, model, messages, system,
 
   const body = {
     model,
-    max_tokens: 4096,
+    max_tokens: maxTokens || 4096,
     stream: true,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    ...(extra || {}),
   };
   if (system && system.trim()) body.system = system.trim();
 
@@ -67,6 +71,7 @@ export async function streamMessage({ proxyUrl, apiKey, model, messages, system,
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
+  let fullThinking = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -92,12 +97,15 @@ export async function streamMessage({ proxyUrl, apiKey, model, messages, system,
 
       if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
         fullText += evt.delta.text;
-        onDelta(evt.delta.text, fullText);
+        onUpdate({ text: fullText, thinking: fullThinking });
+      } else if (evt.type === 'content_block_delta' && evt.delta?.type === 'thinking_delta') {
+        fullThinking += evt.delta.thinking;
+        onUpdate({ text: fullText, thinking: fullThinking });
       } else if (evt.type === 'error') {
         throw new ApiError(evt.error?.message || 'Erro desconhecido da API', 0);
       }
     }
   }
 
-  return fullText;
+  return { text: fullText, thinking: fullThinking };
 }
