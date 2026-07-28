@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html.dark body {
+  background-color: #262624;
+}
+html:not(.dark) body {
+  background-color: #faf9f5;
+}
+
+/* thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 140, 125, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(150, 140, 125, 0.35);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+textarea {
+  field-sizing: content;
+}
+
+/* ---- markdown rendering for assistant messages ---- */
+.md p {
+  margin: 0.6em 0;
+  line-height: 1.65;
+}
+.md p:first-child {
+  margin-top: 0;
+}
+.md p:last-child {
+  margin-bottom: 0;
+}
+.md ul,
+.md ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.25em 0;
+  line-height: 1.6;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  line-height: 1.3;
+}
+.md h1 {
+  font-size: 1.35em;
+}
+.md h2 {
+  font-size: 1.2em;
+}
+.md h3 {
+  font-size: 1.08em;
+}
+.md a {
+  color: #c96442;
+  text-decoration: underline;
+}
+.md blockquote {
+  border-left: 3px solid rgba(150, 140, 125, 0.4);
+  padding-left: 0.9em;
+  margin: 0.6em 0;
+  opacity: 0.85;
+}
+.md strong {
+  font-weight: 600;
+}
+.md hr {
+  border: none;
+  border-top: 1px solid rgba(150, 140, 125, 0.3);
+  margin: 1em 0;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  width: 100%;
+}
+.md th,
+.md td {
+  border: 1px solid rgba(150, 140, 125, 0.3);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.md code {
+  font-family: 'Cascadia Code', Consolas, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.87em;
+  background: rgba(150, 140, 125, 0.18);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.md pre {
+  margin: 0.7em 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.md pre code {
+  display: block;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+@keyframes blink-caret {
+  50% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: '▍';
+  animation: blink-caret 1s step-start infinite;
+  opacity: 0.7;
+}
