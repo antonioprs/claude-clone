@@ -16,9 +16,8 @@
 
 const ANTHROPIC_API = 'https://api.anthropic.com';
 
-// Ex: 'https://antonioprs.github.io'  (sem barra no final)
-// Use '*' apenas para testar localmente - não deixe em produção.
-const ALLOWED_ORIGIN = '*';
+// Restrito ao site publicado no GitHub Pages - só ele pode usar este worker.
+const ALLOWED_ORIGIN = 'https://antonioprs.github.io';
 
 const ALLOWED_HEADERS = ['content-type', 'x-api-key', 'anthropic-version', 'anthropic-dangerous-direct-browser-access', 'anthropic-beta'];
 
